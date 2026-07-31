@@ -1,0 +1,43 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+.kotlin
+
+### Maven Shade plugin ###
+# Written into the project root every time `mvn package` runs
+dependency-reduced-pom.xml
+
+### IntelliJ IDEA ###
+# The whole directory, rather than named files. Anyone cloning this opens it in
+# their own IDE, which regenerates it; workspace.xml in particular is local state
+# (open tabs, run history, window layout) and creates noise in every diff.
+.idea/
+*.iws
+*.iml
+*.ipr
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
