@@ -4,6 +4,7 @@ import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import io.modelcontextprotocol.spec.McpSchema.Tool;
+import io.modelcontextprotocol.spec.McpSchema.ToolAnnotations;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +44,10 @@ public final class CalculateTool {
                         Use for arithmetic and maths. Do not use for currency conversion,
                         because there are no live exchange rates here.
                         """)
+                .annotations(ToolAnnotations.builder()
+                        .readOnlyHint(true)
+                        .openWorldHint(false)
+                        .build())
                 .build();
 
         return SyncToolSpecification.builder()
