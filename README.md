@@ -21,7 +21,7 @@ index that points at these.
 | `class_1` | [Module 1 — Environment Setup](https://themcpguy.com/docs/mcp-java-sdk/environment-setup) |
 
 ```bash
-git clone https://github.com/zkozina/mcp-java-sdk-course.git
+git clone https://github.com/the-mcp-guy/mcp-java-sdk-course.git
 cd mcp-java-sdk-course
 git checkout class_1
 ```
