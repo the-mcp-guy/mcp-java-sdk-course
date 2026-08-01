@@ -17,7 +17,7 @@ More classes are added as the course progresses.
 ## Getting the code
 
 ```bash
-git clone https://github.com/zkozina/mcp-java-sdk-course.git
+git clone https://github.com/the-mcp-guy/mcp-java-sdk-course.git
 cd mcp-java-sdk-course
 git checkout class_1
 ```
