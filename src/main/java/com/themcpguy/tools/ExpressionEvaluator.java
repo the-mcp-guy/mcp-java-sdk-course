@@ -9,28 +9,27 @@ import java.util.function.DoubleUnaryOperator;
  * subset the tool's description advertises: +, -, *, /, ^, parentheses, and the
  * functions sqrt, abs, round, floor, ceil.
  *
- * This is not a production calculator. The point of the tool-server module is the
- * MCP wiring, not yet another expression parser. If you need more, plug in
- * exp4j / Janino / Nashorn behind {@link #evaluate(String)}.
+ * Kept small on purpose. The string it evaluates arrives from a model, and may
+ * originally have come from a user, so the less this understands the less it can
+ * be talked into doing.
  *
- * The evaluator is deliberately strict: anything it can't parse raises
- * {@link IllegalArgumentException} with a message suitable for surfacing back to
- * the model in a tool-error result.
+ * Strict by design: anything it can't parse raises {@link IllegalArgumentException}
+ * with a message suitable for surfacing back to the model in a tool-error result.
  */
 final class ExpressionEvaluator {
 
     private static final Map<String, DoubleUnaryOperator> UNARY = Map.of(
-            "sqrt", Math::sqrt,
-            "abs",  Math::abs,
-            "floor", Math::floor,
-            "ceil", Math::ceil
+        "sqrt", Math::sqrt,
+        "abs",  Math::abs,
+        "floor", Math::floor,
+        "ceil", Math::ceil
     );
 
     private static final Map<String, DoubleBinaryOperator> BINARY = Map.of(
-            "round", (v, places) -> {
-                double scale = Math.pow(10, places);
-                return Math.round(v * scale) / scale;
-            }
+        "round", (v, places) -> {
+            double scale = Math.pow(10, places);
+            return Math.round(v * scale) / scale;
+        }
     );
 
     private ExpressionEvaluator() {}
@@ -57,7 +56,7 @@ final class ExpressionEvaluator {
             skipWhitespace();
             if (pos < src.length()) {
                 throw new IllegalArgumentException(
-                        "unexpected character '" + src.charAt(pos) + "' at position " + pos);
+                    "unexpected character '" + src.charAt(pos) + "' at position " + pos);
             }
             return v;
         }
