@@ -3,12 +3,13 @@
 Companion code for the **Building MCP Servers in Java** course at
 [themcpguy.com](https://themcpguy.com).
 
-This branch (`class_2`) corresponds to
-**[Class 2: Your First MCP Server](https://themcpguy.com/docs/mcp-java-sdk/your-first-mcp-server)**.
+This branch (`class_3`) corresponds to
+**[Class 3: Implementing Tools](https://themcpguy.com/docs/mcp-java-sdk/implementing-tools)**.
 
-The code here is the end state of that module: a working MCP server speaking
-JSON-RPC over stdio, advertising a single `echo` tool that a client such as
-Claude Desktop can discover and call.
+The code here is the end state of that module: a second server, `acme-tools`,
+with three tools of increasing complexity — a pure computation, an async read
+against a repository, and a write that changes state. The Class 2 `echo` server
+is still present and unchanged.
 
 ## Branches
 
@@ -20,11 +21,12 @@ index that points at these.
 | --------- | ----------------------------------------------------------------------------------------------- |
 | `class_1` | [Class 1 — Environment Setup](https://themcpguy.com/docs/mcp-java-sdk/environment-setup)         |
 | `class_2` | [Class 2 — Your First MCP Server](https://themcpguy.com/docs/mcp-java-sdk/your-first-mcp-server) |
+| `class_3` | [Class 3 — Implementing Tools](https://themcpguy.com/docs/mcp-java-sdk/implementing-tools)       |
 
 ```bash
 git clone https://github.com/the-mcp-guy/mcp-java-sdk-course.git
 cd mcp-java-sdk-course
-git checkout class_2
+git checkout class_3
 ```
 
 ## Prerequisites
@@ -48,14 +50,23 @@ reports the JDK Maven itself is running on, which is the one that matters.
 
 ```bash
 mvn clean package
-java -jar target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar
 ```
 
-The server prints one startup line **to stderr** and then blocks, waiting for
+This branch produces **two** servers from the one JAR:
+
+```bash
+# Class 2 — the echo server (the JAR's main class)
+java -jar target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar
+
+# Class 3 — acme-tools, selected explicitly by class name
+java -cp target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar com.themcpguy.tools.ToolsMcpServer
+```
+
+Either prints one startup line **to stderr** and then blocks, waiting for
 JSON-RPC messages on stdin:
 
 ```
-12:00:00 [main] INFO  com.themcpguy.HelloMcpServer - hello-mcp-server started (stdio); awaiting messages on stdin
+12:00:00 [main] INFO  com.themcpguy.tools.ToolsMcpServer - acme-tools started (stdio); awaiting messages on stdin
 ```
 
 That silence is correct — it isn't hung. A stdio MCP server is not meant to be
@@ -66,39 +77,95 @@ re-run with `mvn -U clean package` to force an update check.
 
 ## Connect it to Claude Desktop
 
-Add the server to `claude_desktop_config.json`, using an **absolute** path to the
-JAR (Claude Desktop does not expand `~` or resolve relative paths):
+Config file location:
 
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Paths must be **absolute** — Claude Desktop does not expand `~` or resolve
+relative paths. Rather than typing one by hand, print the correct value and copy
+it from your terminal:
+
+```bash
+echo "$(pwd)/target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar"
+```
+
+Then substitute it into both entries below:
 
 ```json
 {
   "mcpServers": {
     "my-first-server": {
       "command": "java",
-      "args": ["-jar", "/absolute/path/to/mcp-java-sdk-course/target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar"]
+      "args": ["-jar", "PASTE_PATH_HERE"]
+    },
+    "acme-tools": {
+      "command": "java",
+      "args": ["-cp", "PASTE_PATH_HERE", "com.themcpguy.tools.ToolsMcpServer"]
     }
   }
 }
 ```
 
+Note the difference: `my-first-server` uses `-jar` and runs the JAR's manifest
+main class; `acme-tools` uses `-cp` and names its main class explicitly. One JAR,
+two entry points.
+
 Fully quit and reopen Claude Desktop — reloading the window is not enough, since
-the config is read once at startup. Open a new conversation, check that `echo`
-appears in the tools list, then try:
+the config is read once at startup.
 
-> Use the echo tool to send me 'Hello from Java'
+### If your servers disappear from the config
 
-The server replies `Echo: Hello from Java`. The point isn't the output — it's that
-a round trip just completed through the whole path: capability negotiation,
-`tools/list`, `tools/call`, and back.
+Claude Desktop writes its own settings into that same file. If your edit leaves
+it with a JSON syntax error, the app can't parse `mcpServers`, and its next write
+persists the file **without your servers**. Before saving, validate:
+
+```bash
+python3 -m json.tool < ~/Library/Application\ Support/Claude/claude_desktop_config.json > /dev/null && echo OK
+```
+
+Keep a copy of your server entries somewhere outside that file, so restoring is
+a paste rather than an archaeology exercise.
+
+## Trying the tools
+
+Ask for each one by name the first time, to confirm it's wired up:
+
+> Use the calculate tool to work out 2 + 2 * 3
+
+Returns `8`. Then something the model can't answer alone:
+
+> I just got an email from ar@globex.example. Which customer is that?
+
+`search_customers` finds Globex Industries. Then a write:
+
+> Add Dana Wu (dana@globex.example) as a contact there
+
+`add_contact` creates the record and returns it.
+
+**You will notice Claude often answers arithmetic without calling `calculate`.**
+That is expected, and it is the most useful thing in this class: a model reaches
+for a tool when the tool offers something it cannot do itself. `calculate` is
+here to teach the mechanics — typed parameters, schema validation, error results —
+while `search_customers` and `add_contact` show why tools exist at all. Neither
+the customer list nor the ability to write to it lives inside the model.
 
 ## Project layout
 
 ```
-pom.xml                                           Maven build
-src/main/java/com/themcpguy/HelloMcpServer.java   The MCP server — one 'echo' tool over stdio
-src/main/resources/logback.xml                    Logging config (see the note below)
+pom.xml                                    Maven build
+src/main/resources/logback.xml             Logging config (see the note below)
+src/main/java/com/themcpguy/
+├── HelloMcpServer.java                    Class 2 — the 'echo' server, unchanged
+└── tools/                                 Class 3 — the 'acme-tools' server
+    ├── ToolsMcpServer.java                Entry point; wires the three tools together
+    ├── CalculateTool.java                 Sync tool — pure computation
+    ├── ExpressionEvaluator.java           Recursive-descent parser behind 'calculate'
+    ├── SearchCustomersTool.java           Async tool — read from the repository
+    ├── AddContactTool.java                Async tool — write that changes state
+    ├── CustomerRepository.java            The seam a real JPA/HTTP backend would replace
+    ├── AsyncSpecs.java                    Adapts a sync spec so an async server can host it
+    └── Results.java                       Shared error-result helper
 ```
 
 ## Notes on the code
