@@ -8,7 +8,7 @@ import java.util.function.Consumer;
 
 /**
  * Wraps a repository so that adding a contact also announces which resources changed.
- *
+ * <p>
  * A decorator rather than a change to CustomerRepository itself: Class 3's code does
  * not need to know that anything is subscribing to it.
  */
