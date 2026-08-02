@@ -64,7 +64,7 @@ public final class AccountReviewPrompt {
         }
 
         // .toString() rather than a (String) cast: arguments arrive as parsed JSON, so a
-        // client that sends 42 hands you an Integer and the cast would throw.
+        // client that sends 42 hands you an Integer and the cast would throw an exception.
         String customerId = rawCustomerId.toString();
         String tone = arguments.getOrDefault("tone", "brief").toString();
 
