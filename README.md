@@ -3,13 +3,12 @@
 Companion code for the **Building MCP Servers in Java** course at
 [themcpguy.com](https://themcpguy.com).
 
-This branch (`class_4`) corresponds to
-**[Class 4: Implementing Resources](https://themcpguy.com/docs/mcp-java-sdk/implementing-resources)**.
+This branch (`class_5`) corresponds to
+**[Class 5: Implementing Prompts](https://themcpguy.com/docs/mcp-java-sdk/implementing-prompts)**.
 
-The code here is the end state of that module: a third server, `acme-resources`,
-exposing read-only context rather than actions — one fixed resource, two URI
-templates, a binary payload, and live subscription updates. The Class 2 and
-Class 3 servers are still present.
+The code here is the end state of that module: a fourth server, `acme-prompts`,
+exposing reusable prompt templates that the *user* invokes — the third and last
+MCP primitive, after tools and resources. The earlier servers are still present.
 
 ## Branches
 
@@ -23,11 +22,12 @@ index that points at these.
 | `class_2` | [Class 2 — Your First MCP Server](https://themcpguy.com/docs/mcp-java-sdk/your-first-mcp-server)   |
 | `class_3` | [Class 3 — Implementing Tools](https://themcpguy.com/docs/mcp-java-sdk/implementing-tools)         |
 | `class_4` | [Class 4 — Implementing Resources](https://themcpguy.com/docs/mcp-java-sdk/implementing-resources) |
+| `class_5` | [Class 5 — Implementing Prompts](https://themcpguy.com/docs/mcp-java-sdk/implementing-prompts)     |
 
 ```bash
 git clone https://github.com/the-mcp-guy/mcp-java-sdk-course.git
 cd mcp-java-sdk-course
-git checkout class_4
+git checkout class_5
 ```
 
 ## Prerequisites
@@ -53,7 +53,7 @@ reports the JDK Maven itself is running on, which is the one that matters.
 mvn clean package
 ```
 
-This branch produces **three** servers from the one JAR:
+This branch produces **four** servers from the one JAR:
 
 ```bash
 # Class 2 — the echo server (the JAR's main class)
@@ -64,13 +64,16 @@ java -cp target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar com.themcpguy.tools.Tools
 
 # Class 4 — acme-resources
 java -cp target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar com.themcpguy.resources.ResourcesMcpServer
+
+# Class 5 — acme-prompts
+java -cp target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar com.themcpguy.prompts.PromptsMcpServer
 ```
 
 Each prints one startup line **to stderr** and then blocks, waiting for
 JSON-RPC messages on stdin:
 
 ```
-12:00:00 [main] INFO  com.themcpguy.resources.ResourcesMcpServer - acme-resources started (stdio); awaiting messages on stdin
+12:00:00 [main] INFO  com.themcpguy.prompts.PromptsMcpServer - acme-prompts started (stdio); awaiting messages on stdin
 ```
 
 That silence is correct — it isn't hung. A stdio MCP server is not meant to be
@@ -110,6 +113,10 @@ Then substitute it into each entry below:
     "acme-resources": {
       "command": "java",
       "args": ["-cp", "PASTE_PATH_HERE", "com.themcpguy.resources.ResourcesMcpServer"]
+    },
+    "acme-prompts": {
+      "command": "java",
+      "args": ["-cp", "PASTE_PATH_HERE", "com.themcpguy.prompts.PromptsMcpServer"]
     }
   }
 }
@@ -117,7 +124,7 @@ Then substitute it into each entry below:
 
 Note the difference: `my-first-server` uses `-jar` and runs the JAR's manifest
 main class; the others use `-cp` and name their main class explicitly. One JAR,
-three entry points.
+four entry points.
 
 Fully quit and reopen Claude Desktop — reloading the window is not enough, since
 the config is read once at startup.
@@ -184,6 +191,29 @@ notification when data changes, which is what makes `.resources(true, true)`
 `acme-tools` and a client subscribed to that customer's resource is told to
 re-read it.
 
+## Trying the prompts
+
+Prompts are the third MCP primitive, and the one with the clearest owner: **the
+user picks them, not the model.** A tool is something the model decides to call;
+a resource is context someone attaches; a prompt is a saved starting point a
+person deliberately reaches for. In Claude Desktop they surface as slash commands
+or menu entries, not as something invoked mid-reasoning.
+
+`acme-prompts` exposes two:
+
+| Prompt            | Arguments                        | Produces                                    |
+| ----------------- | -------------------------------- | ------------------------------------------- |
+| `account_review`  | `customerId` (required), `tone`  | A single user message briefing a support agent |
+| `escalation_note` | `customerId` (required), `issue` | A multi-message exchange that seeds a draft |
+
+Note what `escalation_note` returns: several messages, including an `assistant`
+turn. A prompt isn't limited to one block of text — it can prime a whole
+conversation, putting words in the assistant's mouth so the model continues in a
+established format rather than inventing one.
+
+Both fetch live customer data when expanded, so an unknown id fails with
+`-32002` rather than producing a confidently wrong prompt.
+
 ## Project layout
 
 ```
@@ -200,13 +230,18 @@ src/main/java/com/themcpguy/
 │   ├── CustomerRepository.java            The seam a real JPA/HTTP backend would replace
 │   │                                        (Class 4 adds allAsync + contactsForAsync)
 │   ├── AsyncSpecs.java                    Adapts a sync spec so an async server can host it
+│   │                                        (Class 5 adds the prompt overload)
 │   └── Results.java                       Shared error-result helper
-└── resources/                             Class 4 — the 'acme-resources' server
-    ├── ResourcesMcpServer.java            Entry point; declares subscribe + listChanged
-    ├── CustomerDirectoryResource.java     Fixed URI — the whole directory as JSON
-    ├── CustomerProfileResource.java       Template URI — one customer, with contacts
-    ├── CustomerBadgeResource.java         Template URI — binary PNG as a base64 blob
-    └── NotifyingCustomerRepository.java   Decorator that fires change notifications
+├── resources/                             Class 4 — the 'acme-resources' server
+│   ├── ResourcesMcpServer.java            Entry point; declares subscribe + listChanged
+│   ├── CustomerDirectoryResource.java     Fixed URI — the whole directory as JSON
+│   ├── CustomerProfileResource.java       Template URI — one customer, with contacts
+│   ├── CustomerBadgeResource.java         Template URI — binary PNG as a base64 blob
+│   └── NotifyingCustomerRepository.java   Decorator that fires change notifications
+└── prompts/                               Class 5 — the 'acme-prompts' server
+    ├── PromptsMcpServer.java              Entry point; declares listChanged
+    ├── AccountReviewPrompt.java           Single-message prompt with an optional tone
+    └── EscalationNotePrompt.java          Multi-message prompt that seeds a draft
 ```
 
 ## Notes on the code

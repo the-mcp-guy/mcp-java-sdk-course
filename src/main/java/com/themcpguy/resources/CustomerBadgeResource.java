@@ -25,7 +25,7 @@ import java.util.List;
 /**
  * A binary resource template. Everything is the same as a text resource except the
  * contents type: BlobResourceContents carries base64 instead of text.
- *
+ * <p>
  * The badge is drawn on the fly so the example needs no image files on disk.
  */
 public final class CustomerBadgeResource {
