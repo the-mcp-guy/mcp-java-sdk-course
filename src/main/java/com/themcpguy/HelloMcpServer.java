@@ -17,9 +17,9 @@ import org.slf4j.LoggerFactory;
  * exercises the full request lifecycle (initialize, capability negotiation, tools/list,
  * tools/call) and proves the SDK, the transport, and the tool dispatch all wire up
  * correctly.
- *
+ * <p>
  * Run as a fat JAR; point Claude Desktop / Cursor / Zed at it via stdio.
- *
+ * <p>
  * See course Module 2: <a href="https://themcpguy.com/docs/mcp-java-sdk/your-first-mcp-server">...</a>
  */
 public class HelloMcpServer {

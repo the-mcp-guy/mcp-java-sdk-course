@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Both methods return CompletableFuture so that non-reactive backends (JDBC, JPA,
  * a REST client) compose cleanly via Mono.fromFuture.
- *
+ * <p>
  * In a real application this would be a JPA repository or an HTTP client. Here it is
  * an interface with a small in-memory implementation, so the seam you would replace
  * is obvious and a test can substitute a repository that fails on purpose.
