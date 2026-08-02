@@ -8,11 +8,11 @@ import java.util.function.DoubleUnaryOperator;
  * Tiny arithmetic expression evaluator used by the 'calculate' tool. Supports the
  * subset the tool's description advertises: +, -, *, /, ^, parentheses, and the
  * functions sqrt, abs, round, floor, ceil.
- *
+ * <p>
  * Kept small on purpose. The string it evaluates arrives from a model, and may
  * originally have come from a user, so the less this understands the less it can
  * be talked into doing.
- *
+ * <p>
  * Strict by design: anything it can't parse raises {@link IllegalArgumentException}
  * with a message suitable for surfacing back to the model in a tool-error result.
  */
