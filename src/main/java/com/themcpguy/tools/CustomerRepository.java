@@ -30,6 +30,12 @@ public interface CustomerRepository {
     /** Fails with NoSuchElementException if customerId does not exist. */
     CompletableFuture<Contact> addContactAsync(String customerId, String name, String email);
 
+    /** Every customer, for the directory resource in Class 4. */
+    CompletableFuture<List<Customer>> allAsync();
+
+    /** The people at one customer, for the profile resource in Class 4. */
+    CompletableFuture<List<Contact>> contactsForAsync(String customerId);
+
     static CustomerRepository inMemory() {
         return new InMemory();
     }
@@ -82,6 +88,18 @@ public interface CustomerRepository {
                 contacts.add(created);
                 return created;
             });
+        }
+
+        @Override
+        public CompletableFuture<List<Customer>> allAsync() {
+            return CompletableFuture.supplyAsync(() -> List.copyOf(customers));
+        }
+
+        @Override
+        public CompletableFuture<List<Contact>> contactsForAsync(String customerId) {
+            return CompletableFuture.supplyAsync(() -> contacts.stream()
+                    .filter(c -> c.customerId().equalsIgnoreCase(customerId))
+                    .toList());
         }
     }
 }

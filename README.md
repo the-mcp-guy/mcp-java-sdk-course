@@ -3,13 +3,13 @@
 Companion code for the **Building MCP Servers in Java** course at
 [themcpguy.com](https://themcpguy.com).
 
-This branch (`class_3`) corresponds to
-**[Class 3: Implementing Tools](https://themcpguy.com/docs/mcp-java-sdk/implementing-tools)**.
+This branch (`class_4`) corresponds to
+**[Class 4: Implementing Resources](https://themcpguy.com/docs/mcp-java-sdk/implementing-resources)**.
 
-The code here is the end state of that module: a second server, `acme-tools`,
-with three tools of increasing complexity — a pure computation, an async read
-against a repository, and a write that changes state. The Class 2 `echo` server
-is still present and unchanged.
+The code here is the end state of that module: a third server, `acme-resources`,
+exposing read-only context rather than actions — one fixed resource, two URI
+templates, a binary payload, and live subscription updates. The Class 2 and
+Class 3 servers are still present.
 
 ## Branches
 
@@ -17,16 +17,17 @@ Each class in the course has its own branch, so you can check out the exact stat
 of the project at any point in the series. `main` holds no code — it's just the
 index that points at these.
 
-| Branch    | Module                                                                                          |
-| --------- | ----------------------------------------------------------------------------------------------- |
-| `class_1` | [Class 1 — Environment Setup](https://themcpguy.com/docs/mcp-java-sdk/environment-setup)         |
-| `class_2` | [Class 2 — Your First MCP Server](https://themcpguy.com/docs/mcp-java-sdk/your-first-mcp-server) |
-| `class_3` | [Class 3 — Implementing Tools](https://themcpguy.com/docs/mcp-java-sdk/implementing-tools)       |
+| Branch    | Module                                                                                            |
+| --------- | ------------------------------------------------------------------------------------------------- |
+| `class_1` | [Class 1 — Environment Setup](https://themcpguy.com/docs/mcp-java-sdk/environment-setup)           |
+| `class_2` | [Class 2 — Your First MCP Server](https://themcpguy.com/docs/mcp-java-sdk/your-first-mcp-server)   |
+| `class_3` | [Class 3 — Implementing Tools](https://themcpguy.com/docs/mcp-java-sdk/implementing-tools)         |
+| `class_4` | [Class 4 — Implementing Resources](https://themcpguy.com/docs/mcp-java-sdk/implementing-resources) |
 
 ```bash
 git clone https://github.com/the-mcp-guy/mcp-java-sdk-course.git
 cd mcp-java-sdk-course
-git checkout class_3
+git checkout class_4
 ```
 
 ## Prerequisites
@@ -52,7 +53,7 @@ reports the JDK Maven itself is running on, which is the one that matters.
 mvn clean package
 ```
 
-This branch produces **two** servers from the one JAR:
+This branch produces **three** servers from the one JAR:
 
 ```bash
 # Class 2 — the echo server (the JAR's main class)
@@ -60,13 +61,16 @@ java -jar target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar
 
 # Class 3 — acme-tools, selected explicitly by class name
 java -cp target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar com.themcpguy.tools.ToolsMcpServer
+
+# Class 4 — acme-resources
+java -cp target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar com.themcpguy.resources.ResourcesMcpServer
 ```
 
-Either prints one startup line **to stderr** and then blocks, waiting for
+Each prints one startup line **to stderr** and then blocks, waiting for
 JSON-RPC messages on stdin:
 
 ```
-12:00:00 [main] INFO  com.themcpguy.tools.ToolsMcpServer - acme-tools started (stdio); awaiting messages on stdin
+12:00:00 [main] INFO  com.themcpguy.resources.ResourcesMcpServer - acme-resources started (stdio); awaiting messages on stdin
 ```
 
 That silence is correct — it isn't hung. A stdio MCP server is not meant to be
@@ -90,7 +94,7 @@ it from your terminal:
 echo "$(pwd)/target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar"
 ```
 
-Then substitute it into both entries below:
+Then substitute it into each entry below:
 
 ```json
 {
@@ -102,14 +106,18 @@ Then substitute it into both entries below:
     "acme-tools": {
       "command": "java",
       "args": ["-cp", "PASTE_PATH_HERE", "com.themcpguy.tools.ToolsMcpServer"]
+    },
+    "acme-resources": {
+      "command": "java",
+      "args": ["-cp", "PASTE_PATH_HERE", "com.themcpguy.resources.ResourcesMcpServer"]
     }
   }
 }
 ```
 
 Note the difference: `my-first-server` uses `-jar` and runs the JAR's manifest
-main class; `acme-tools` uses `-cp` and names its main class explicitly. One JAR,
-two entry points.
+main class; the others use `-cp` and name their main class explicitly. One JAR,
+three entry points.
 
 Fully quit and reopen Claude Desktop — reloading the window is not enough, since
 the config is read once at startup.
@@ -150,6 +158,32 @@ here to teach the mechanics — typed parameters, schema validation, error resul
 while `search_customers` and `add_contact` show why tools exist at all. Neither
 the customer list nor the ability to write to it lives inside the model.
 
+## Trying the resources
+
+Resources are **read-only context**, not actions. Where a tool is something the
+model decides to *do*, a resource is something the user or client chooses to put
+in front of it — closer to attaching a file than to calling a function. In Claude
+Desktop they appear under the attachment menu rather than the tools list.
+
+`acme-resources` exposes three, covering the shapes you'll meet in practice:
+
+| URI                                | Kind          | Returns                                    |
+| ---------------------------------- | ------------- | ------------------------------------------ |
+| `customers://directory`            | fixed         | JSON array of every customer               |
+| `customers://{customerId}`         | template      | one customer plus its contacts, as JSON    |
+| `customers://{customerId}/badge.png` | template    | a PNG, returned as a base64 blob           |
+
+The fixed resource is listed by `resources/list`; the two templates appear under
+`resources/templates/list` and are filled in when read. Reading an unknown
+customer returns a `-32002 Resource not found` error rather than an empty result,
+so the client can tell "no such thing" from "nothing there".
+
+`NotifyingCustomerRepository` wraps the Class 3 repository and fires a
+notification when data changes, which is what makes `.resources(true, true)`
+— subscribe and listChanged — more than a declaration. Add a contact through
+`acme-tools` and a client subscribed to that customer's resource is told to
+re-read it.
+
 ## Project layout
 
 ```
@@ -157,15 +191,22 @@ pom.xml                                    Maven build
 src/main/resources/logback.xml             Logging config (see the note below)
 src/main/java/com/themcpguy/
 ├── HelloMcpServer.java                    Class 2 — the 'echo' server, unchanged
-└── tools/                                 Class 3 — the 'acme-tools' server
-    ├── ToolsMcpServer.java                Entry point; wires the three tools together
-    ├── CalculateTool.java                 Sync tool — pure computation
-    ├── ExpressionEvaluator.java           Recursive-descent parser behind 'calculate'
-    ├── SearchCustomersTool.java           Async tool — read from the repository
-    ├── AddContactTool.java                Async tool — write that changes state
-    ├── CustomerRepository.java            The seam a real JPA/HTTP backend would replace
-    ├── AsyncSpecs.java                    Adapts a sync spec so an async server can host it
-    └── Results.java                       Shared error-result helper
+├── tools/                                 Class 3 — the 'acme-tools' server
+│   ├── ToolsMcpServer.java                Entry point; wires the three tools together
+│   ├── CalculateTool.java                 Sync tool — pure computation
+│   ├── ExpressionEvaluator.java           Recursive-descent parser behind 'calculate'
+│   ├── SearchCustomersTool.java           Async tool — read from the repository
+│   ├── AddContactTool.java                Async tool — write that changes state
+│   ├── CustomerRepository.java            The seam a real JPA/HTTP backend would replace
+│   │                                        (Class 4 adds allAsync + contactsForAsync)
+│   ├── AsyncSpecs.java                    Adapts a sync spec so an async server can host it
+│   └── Results.java                       Shared error-result helper
+└── resources/                             Class 4 — the 'acme-resources' server
+    ├── ResourcesMcpServer.java            Entry point; declares subscribe + listChanged
+    ├── CustomerDirectoryResource.java     Fixed URI — the whole directory as JSON
+    ├── CustomerProfileResource.java       Template URI — one customer, with contacts
+    ├── CustomerBadgeResource.java         Template URI — binary PNG as a base64 blob
+    └── NotifyingCustomerRepository.java   Decorator that fires change notifications
 ```
 
 ## Notes on the code
