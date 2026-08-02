@@ -3,12 +3,13 @@
 Companion code for the **Building MCP Servers in Java** course at
 [themcpguy.com](https://themcpguy.com).
 
-This branch (`class_5`) corresponds to
-**[Class 5: Implementing Prompts](https://themcpguy.com/docs/mcp-java-sdk/implementing-prompts)**.
+This branch (`class_6`) corresponds to
+**[Class 6: Error Handling](https://themcpguy.com/docs/mcp-java-sdk/error-handling)**.
 
-The code here is the end state of that module: a fourth server, `acme-prompts`,
-exposing reusable prompt templates that the *user* invokes — the third and last
-MCP primitive, after tools and resources. The earlier servers are still present.
+The code here is the end state of that module: a fifth server, `acme-errors`,
+whose backend can be told to fail on purpose, so you can watch what a handler
+does when the database is slow, broken, or simply has no answer. The earlier
+servers are still present.
 
 ## Branches
 
@@ -23,11 +24,12 @@ index that points at these.
 | `class_3` | [Class 3 — Implementing Tools](https://themcpguy.com/docs/mcp-java-sdk/implementing-tools)         |
 | `class_4` | [Class 4 — Implementing Resources](https://themcpguy.com/docs/mcp-java-sdk/implementing-resources) |
 | `class_5` | [Class 5 — Implementing Prompts](https://themcpguy.com/docs/mcp-java-sdk/implementing-prompts)     |
+| `class_6` | [Class 6 — Error Handling](https://themcpguy.com/docs/mcp-java-sdk/error-handling)                 |
 
 ```bash
 git clone https://github.com/the-mcp-guy/mcp-java-sdk-course.git
 cd mcp-java-sdk-course
-git checkout class_5
+git checkout class_6
 ```
 
 ## Prerequisites
@@ -53,7 +55,7 @@ reports the JDK Maven itself is running on, which is the one that matters.
 mvn clean package
 ```
 
-This branch produces **four** servers from the one JAR:
+This branch produces **five** servers from the one JAR:
 
 ```bash
 # Class 2 — the echo server (the JAR's main class)
@@ -67,13 +69,16 @@ java -cp target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar com.themcpguy.resources.R
 
 # Class 5 — acme-prompts
 java -cp target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar com.themcpguy.prompts.PromptsMcpServer
+
+# Class 6 — acme-errors; takes an optional failure mode: NONE, SLOW, or BROKEN
+java -cp target/mcp-java-sdk-course-1.0.0-SNAPSHOT.jar com.themcpguy.errors.ErrorsMcpServer BROKEN
 ```
 
 Each prints one startup line **to stderr** and then blocks, waiting for
 JSON-RPC messages on stdin:
 
 ```
-12:00:00 [main] INFO  com.themcpguy.prompts.PromptsMcpServer - acme-prompts started (stdio); awaiting messages on stdin
+12:00:00 [main] INFO  com.themcpguy.errors.ErrorsMcpServer - acme-errors started (stdio) with backend failure mode BROKEN
 ```
 
 That silence is correct — it isn't hung. A stdio MCP server is not meant to be
@@ -117,6 +122,10 @@ Then substitute it into each entry below:
     "acme-prompts": {
       "command": "java",
       "args": ["-cp", "PASTE_PATH_HERE", "com.themcpguy.prompts.PromptsMcpServer"]
+    },
+    "acme-errors": {
+      "command": "java",
+      "args": ["-cp", "PASTE_PATH_HERE", "com.themcpguy.errors.ErrorsMcpServer", "BROKEN"]
     }
   }
 }
@@ -124,7 +133,8 @@ Then substitute it into each entry below:
 
 Note the difference: `my-first-server` uses `-jar` and runs the JAR's manifest
 main class; the others use `-cp` and name their main class explicitly. One JAR,
-four entry points.
+five entry points. `acme-errors` takes a further argument — the failure mode its
+fake backend should simulate.
 
 Fully quit and reopen Claude Desktop — reloading the window is not enough, since
 the config is read once at startup.
@@ -214,6 +224,51 @@ established format rather than inventing one.
 Both fetch live customer data when expanded, so an unknown id fails with
 `-32002` rather than producing a confidently wrong prompt.
 
+## Trying the error handling
+
+`acme-errors` is Class 3's server with one line changed — its repository is
+constructed with a failure mode, so the backend can be told to misbehave:
+
+```bash
+NONE      # behaves normally
+SLOW      # sleeps 30s, far past any sensible timeout
+BROKEN    # throws immediately, like a pool with no connections
+```
+
+Start it with `BROKEN` and call `search_customers`. Instead of a stack trace or
+a dropped connection, you get a tool result the model can read and act on:
+
+```
+isError=true   Internal error: customer-db: no connections available in pool
+```
+
+That distinction is the whole class. A **tool error** — `isError: true` with text
+— is part of a normal response: the model sees it, can explain it, and can try
+something else. A **protocol error** means the request itself was invalid, and the
+model never gets a chance to recover. Backend failures are almost always the
+former.
+
+### The tool that hangs
+
+Two tools exist purely for contrast. `find_customer` and `find_customer_broken`
+are the same code, except one line:
+
+```java
+found = found.defaultIfEmpty(Results.error("No customer with id '" + customerId + "'"));
+```
+
+Ask each for a customer that doesn't exist:
+
+| Tool                    | Result                                       |
+| ----------------------- | -------------------------------------------- |
+| `find_customer`         | `isError=true  No customer with id 'NOPE'`   |
+| `find_customer_broken`  | **nothing — ever**                           |
+
+Without that line the Mono completes empty, the SDK writes no response at all,
+and the client waits until its own timeout expires. No exception is thrown and
+nothing appears in the logs, which makes it one of the harder MCP bugs to spot:
+an empty result and a hung request look identical from the server's side.
+
 ## Project layout
 
 ```
@@ -228,7 +283,8 @@ src/main/java/com/themcpguy/
 │   ├── SearchCustomersTool.java           Async tool — read from the repository
 │   ├── AddContactTool.java                Async tool — write that changes state
 │   ├── CustomerRepository.java            The seam a real JPA/HTTP backend would replace
-│   │                                        (Class 4 adds allAsync + contactsForAsync)
+│   │                                        (Class 4 adds allAsync + contactsForAsync;
+│   │                                         Class 6 adds the Failure fault injection)
 │   ├── AsyncSpecs.java                    Adapts a sync spec so an async server can host it
 │   │                                        (Class 5 adds the prompt overload)
 │   └── Results.java                       Shared error-result helper
@@ -238,10 +294,13 @@ src/main/java/com/themcpguy/
 │   ├── CustomerProfileResource.java       Template URI — one customer, with contacts
 │   ├── CustomerBadgeResource.java         Template URI — binary PNG as a base64 blob
 │   └── NotifyingCustomerRepository.java   Decorator that fires change notifications
-└── prompts/                               Class 5 — the 'acme-prompts' server
-    ├── PromptsMcpServer.java              Entry point; declares listChanged
-    ├── AccountReviewPrompt.java           Single-message prompt with an optional tone
-    └── EscalationNotePrompt.java          Multi-message prompt that seeds a draft
+├── prompts/                               Class 5 — the 'acme-prompts' server
+│   ├── PromptsMcpServer.java              Entry point; declares listChanged
+│   ├── AccountReviewPrompt.java           Single-message prompt with an optional tone
+│   └── EscalationNotePrompt.java          Multi-message prompt that seeds a draft
+└── errors/                                Class 6 — the 'acme-errors' server
+    ├── ErrorsMcpServer.java               Entry point; takes NONE / SLOW / BROKEN
+    └── FindCustomerTool.java              Built twice — one handles empty, one hangs
 ```
 
 ## Notes on the code

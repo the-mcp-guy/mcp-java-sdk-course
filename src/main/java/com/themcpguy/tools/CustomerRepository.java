@@ -1,5 +1,6 @@
 package com.themcpguy.tools;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
@@ -36,8 +37,23 @@ public interface CustomerRepository {
     /** The people at one customer, for the profile resource in Class 4. */
     CompletableFuture<List<Contact>> contactsForAsync(String customerId);
 
+    /** Ways the fake backend can misbehave on searchAsync, so Class 6 can watch handlers react. */
+    enum Failure {
+        /** Behaves normally. What Classes 3 to 5 use. */
+        NONE,
+        /** Never answers in time: sleeps well past any sensible timeout. */
+        SLOW,
+        /** Fails immediately, the way a database with no connections would. */
+        BROKEN
+    }
+
     static CustomerRepository inMemory() {
-        return new InMemory();
+        return inMemory(Failure.NONE);
+    }
+
+    /** Class 6: the same repository, told to misbehave. */
+    static CustomerRepository inMemory(Failure failure) {
+        return new InMemory(failure);
     }
 
     /**
@@ -46,6 +62,12 @@ public interface CustomerRepository {
      * genuinely overlap an add.
      */
     final class InMemory implements CustomerRepository {
+
+        private final Failure failure;
+
+        InMemory(Failure failure) {
+            this.failure = failure;
+        }
 
         private final List<Customer> customers = new CopyOnWriteArrayList<>(List.of(
                 new Customer("CUST-1", "Acme Corp", "billing@acme.example", "ACTIVE"),
@@ -58,10 +80,31 @@ public interface CustomerRepository {
         @Override
         public CompletableFuture<List<Customer>> searchAsync(String query, int limit) {
             String needle = query.toLowerCase(Locale.ROOT);
-            return CompletableFuture.supplyAsync(() -> customers.stream()
-                    .filter(c -> matches(c, needle, query))
-                    .limit(limit)
-                    .toList());
+            return CompletableFuture.supplyAsync(() -> {
+                misbehave();
+                return customers.stream()
+                        .filter(c -> matches(c, needle, query))
+                        .limit(limit)
+                        .toList();
+            });
+        }
+
+        /** Only ever does anything when Class 6 asks for a broken backend. */
+        private void misbehave() {
+            switch (failure) {
+                case SLOW -> {
+                    try {
+                        Thread.sleep(Duration.ofSeconds(30));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("interrupted while pretending to be slow", e);
+                    }
+                }
+                case BROKEN -> throw new IllegalStateException(
+                        "customer-db: no connections available in pool");
+                case NONE -> {
+                }
+            }
         }
 
         private boolean matches(Customer customer, String needle, String rawQuery) {
