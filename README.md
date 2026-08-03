@@ -3,18 +3,20 @@
 Companion code for the **Building MCP Servers in Java** course at
 [themcpguy.com](https://themcpguy.com).
 
-This branch (`class_7`) corresponds to
-**[Class 7: Testing MCP Servers](https://themcpguy.com/docs/mcp-java-sdk/testing)**.
+This branch (`class_9`) corresponds to
+**[Class 9: MCP over HTTP](https://themcpguy.com/docs/mcp-java-sdk/mcp-over-http)**,
+the last class in the series.
 
-The code here is the end state of that module: no new server, but a test suite
-covering everything built so far — unit tests that call handlers directly, and
-integration tests that launch a real server over stdio and speak MCP to it.
+The code here is the end state of that module: the same customer server built in
+Classes 3 to 7, now reachable over HTTP instead of stdio. A stdio server is a
+child process, and a child process cannot be shared — moving to HTTP is what
+makes one server available to several clients at once.
 
 ## Branches
 
-Each class in the course has its own branch, so you can check out the exact state
-of the project at any point in the series. `main` holds no code — it's just the
-index that points at these.
+Every class that adds code has its own branch, so you can check out the exact
+state of the project at any point in the series. `main` holds the finished
+project.
 
 | Branch    | Module                                                                                            |
 | --------- | ------------------------------------------------------------------------------------------------- |
@@ -25,11 +27,17 @@ index that points at these.
 | `class_5` | [Class 5 — Implementing Prompts](https://themcpguy.com/docs/mcp-java-sdk/implementing-prompts)     |
 | `class_6` | [Class 6 — Error Handling](https://themcpguy.com/docs/mcp-java-sdk/error-handling)                 |
 | `class_7` | [Class 7 — Testing MCP Servers](https://themcpguy.com/docs/mcp-java-sdk/testing)                   |
+| —         | [Class 8 — Security](https://themcpguy.com/docs/mcp-java-sdk/security)                             |
+| `class_9` | [Class 9 — MCP over HTTP](https://themcpguy.com/docs/mcp-java-sdk/mcp-over-http)                   |
+
+Class 8 has no branch. It is a reading class about what an MCP server exposes and
+what a client can be talked into doing, and the one server it asks you to write
+is meant to be deleted once you have seen it work.
 
 ```bash
 git clone https://github.com/the-mcp-guy/mcp-java-sdk-course.git
 cd mcp-java-sdk-course
-git checkout class_7
+git checkout class_9
 ```
 
 ## Prerequisites
@@ -37,7 +45,8 @@ git checkout class_7
 - **Java 17 minimum, Java 21 recommended.** The MCP Java SDK requires 17; the
   course targets 21 so we can use virtual threads later on.
 - **Maven 3.9+**
-- **Claude Desktop**, which launches the server and acts as the MCP client
+- **Claude Desktop**, which launches the stdio servers and acts as the MCP client
+- **Claude Code or `curl`**, to talk to the HTTP server from Class 9
 
 Check your JDK:
 
@@ -55,7 +64,8 @@ reports the JDK Maven itself is running on, which is the one that matters.
 mvn clean package
 ```
 
-This branch produces **five** servers from the one JAR:
+This branch produces **six** servers. Five of them speak stdio and run from the
+one JAR:
 
 ```bash
 # Class 2 — the echo server (the JAR's main class)
@@ -86,6 +96,33 @@ driven by hand; it waits for a client to speak first. Press `Ctrl+C` to stop it.
 
 If the process exits immediately instead, the dependencies likely didn't resolve —
 re-run with `mvn -U clean package` to force an update check.
+
+The sixth server is the Class 9 one, and it starts differently:
+
+```bash
+# Class 9 — acme-http, on http://127.0.0.1:8080/mcp
+mvn spring-boot:run
+```
+
+```
+Tomcat started on port 8080 (http) with context path '/'
+Started McpHttpApplication in 0.501 seconds (process running for 0.628)
+```
+
+**Use `mvn spring-boot:run`, not the JAR.** Launching this one with
+`java -cp target/...jar com.themcpguy.http.McpHttpApplication` starts Spring and
+then fails while wiring the transport:
+
+```
+Caused by: java.lang.IllegalArgumentException: MCP endpoint must not be null
+	at com.themcpguy.http.McpHttpConfig.mcpTransport(McpHttpConfig.java:61)
+```
+
+`endpoint` is null because `application.yml` was never read. The shade plugin
+overwrites the `META-INF` descriptors Spring uses to find its own
+auto-configuration rather than merging them, so the machinery that loads
+configuration files never runs. Note where the error surfaces — several layers
+below the actual cause, and with no mention of the missing file.
 
 ## Connect it to Claude Desktop
 
@@ -151,6 +188,66 @@ python3 -m json.tool < ~/Library/Application\ Support/Claude/claude_desktop_conf
 
 Keep a copy of your server entries somewhere outside that file, so restoring is
 a paste rather than an archaeology exercise.
+
+## Talking to the HTTP server
+
+With `mvn spring-boot:run` running in another terminal, the whole protocol is
+visible from the command line. Start with `initialize`:
+
+```bash
+curl -i -X POST http://127.0.0.1:8080/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1"}}}'
+```
+
+```
+HTTP/1.1 200
+Mcp-Session-Id: b0316a9c-62f6-4a32-b92b-a2cfa42e0ddb
+Content-Type: application/json;charset=UTF-8
+
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{...},
+ "serverInfo":{"name":"acme-http","version":"1.0.0"}}}
+```
+
+The `Mcp-Session-Id` response header is the part that matters. Every later
+request has to send it back, or the server has no idea which conversation the
+request belongs to. Copy it into the next call:
+
+```bash
+curl -N -X POST http://127.0.0.1:8080/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'Mcp-Session-Id: PASTE-YOURS-HERE' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_customers","arguments":{"query":"globex"}}}'
+```
+
+```
+event: message
+data: {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text",
+      "text":"[{\"id\":\"CUST-2\",\"name\":\"Globex Industries\",
+      \"email\":\"ar@globex.example\",\"accountStatus\":\"ACTIVE\"}]"}],"isError":false}}
+```
+
+The response comes back as `text/event-stream` rather than plain JSON, which is
+why the `Accept` header lists both. One endpoint answers both POST and GET, as
+the specification asks.
+
+### Registering it with Claude Code
+
+```bash
+claude mcp add --transport http acme-http http://127.0.0.1:8080/mcp
+```
+
+The tools then appear the same way the stdio ones do. Nothing about the tool
+definitions changed between the two transports — only how the bytes arrive.
+
+### What this class leaves out
+
+No authentication, no TLS, no deployment. The server binds to `127.0.0.1` and
+checks `Origin` and `Host` against the allow-lists in `application.yml`, which is
+enough for a server running on your own machine and not enough for one that
+isn't. Those are deployment concerns rather than protocol ones.
 
 ## Trying the tools
 
@@ -315,6 +412,8 @@ reads as a conversation rather than as pipe plumbing.
 ```
 pom.xml                                    Maven build
 src/main/resources/logback.xml             Logging config (see the note below)
+src/main/resources/application.yml         Class 9 — port, bind address, MCP endpoint,
+                                             and the Origin/Host allow-lists
 src/main/java/com/themcpguy/
 ├── HelloMcpServer.java                    Class 2 — the 'echo' server, unchanged
 ├── tools/                                 Class 3 — the 'acme-tools' server
@@ -339,9 +438,14 @@ src/main/java/com/themcpguy/
 │   ├── PromptsMcpServer.java              Entry point; declares listChanged
 │   ├── AccountReviewPrompt.java           Single-message prompt with an optional tone
 │   └── EscalationNotePrompt.java          Multi-message prompt that seeds a draft
-└── errors/                                Class 6 — the 'acme-errors' server
-    ├── ErrorsMcpServer.java               Entry point; takes NONE / SLOW / BROKEN
-    └── FindCustomerTool.java              Built twice — one handles empty, one hangs
+├── errors/                                Class 6 — the 'acme-errors' server
+│   ├── ErrorsMcpServer.java               Entry point; takes NONE / SLOW / BROKEN
+│   └── FindCustomerTool.java              Built twice — one handles empty, one hangs
+└── http/                                  Class 9 — the 'acme-http' server
+    ├── McpHttpApplication.java            Spring Boot entry point
+    ├── McpHttpConfig.java                 Transport, servlet registration, and the
+    │                                        same tools/resources/prompts as before
+    └── McpHttpProperties.java             Binds everything under 'mcp:' in application.yml
 
 src/test/java/com/themcpguy/              Class 7 — the test suite
 ├── McpTestServer.java                     Harness: launches the JAR, does the handshake
@@ -375,9 +479,36 @@ block also means you can paste JSON Schema straight from the MCP spec, instead o
 hand-translating it into nested `Map.of(...)` calls where a typo'd key compiles
 fine and only misbehaves at runtime.
 
+**The HTTP server declares its own `ObjectMapper`.**
+Spring Boot 4 auto-configures a Jackson 3 mapper, which lives in `tools.jackson`
+and is a different type from the `com.fasterxml` one the MCP SDK is built on.
+Letting Spring supply the mapper therefore doesn't work — `McpHttpConfig`
+declares the `com.fasterxml` one as a bean, and that becomes the single place to
+configure it.
+
+**Registering the servlet is a separate step from creating the transport.**
+`HttpServletStreamableServerTransportProvider` is an `HttpServlet`, but Spring
+does not route to it until a `ServletRegistrationBean` maps it to a path. Drop
+the `@Bean` annotation from `mcpServlet` and the application still starts
+cleanly — Tomcat reports the port, the MCP server is constructed, nothing in the
+log looks wrong — but every request to the endpoint gets:
+
+```
+HTTP/1.1 404
+{"timestamp":"...","status":404,"error":"Not Found","path":"/mcp"}
+```
+
 ## Notes on the build
 
 A few choices in `pom.xml` are deliberate and worth understanding:
+
+**Class 9 adds Spring Boot in two pieces.** A `dependencyManagement` import of
+`spring-boot-dependencies` pins the versions, so `spring-boot-starter-web` is
+declared without one. The starter brings embedded Tomcat, which is what lets the
+server answer HTTP at all. The `spring-boot-maven-plugin` is declared only to
+provide `mvn spring-boot:run` — it is not bound to an execution, so `mvn package`
+still produces the shaded JAR for the five stdio servers and nothing repackages
+it.
 
 **Class 7 adds three build entries.** `assertj-core` for `assertThat(...)`,
 `reactor-test` for `StepVerifier` (asserting on a `Mono` without blocking), and
@@ -407,6 +538,20 @@ Shade also writes a `dependency-reduced-pom.xml` into the project root on every
 `release` is what the compiler actually honours, and it also restricts the API
 you compile against to the target version — so you can't accidentally link a
 newer JDK method that would fail at runtime.
+
+## What we built
+
+| Class   | Coverage                                |
+| ------- | --------------------------------------- |
+| Class 1 | Prerequisites and environment setup     |
+| Class 2 | Echo server over stdio                  |
+| Class 3 | Three tools and model selection logic   |
+| Class 4 | Resources, templates, binary content    |
+| Class 5 | Prompts and argument validation         |
+| Class 6 | Error handling and failed responses     |
+| Class 7 | Unit and integration tests              |
+| Class 8 | Security considerations                 |
+| Class 9 | Same server over HTTP                   |
 
 ## License
 
