@@ -45,10 +45,42 @@
             <version>5.11.0</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- Class 7. assertThat(...) reads better than assertEquals(expected, actual). -->
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.27.7</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Class 7. StepVerifier, for asserting on a Mono without blocking.
+             Kept in step with the reactor-core that mcp-core brings in. -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <version>3.7.0</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <!-- Class 7. Runs *IT classes in the integration-test phase, after package,
+                 so the JAR the test launches actually exists. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.5.2</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Builds a runnable fat JAR, which is what Claude Desktop launches -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
