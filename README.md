@@ -3,13 +3,12 @@
 Companion code for the **Building MCP Servers in Java** course at
 [themcpguy.com](https://themcpguy.com).
 
-This branch (`class_6`) corresponds to
-**[Class 6: Error Handling](https://themcpguy.com/docs/mcp-java-sdk/error-handling)**.
+This branch (`class_7`) corresponds to
+**[Class 7: Testing MCP Servers](https://themcpguy.com/docs/mcp-java-sdk/testing)**.
 
-The code here is the end state of that module: a fifth server, `acme-errors`,
-whose backend can be told to fail on purpose, so you can watch what a handler
-does when the database is slow, broken, or simply has no answer. The earlier
-servers are still present.
+The code here is the end state of that module: no new server, but a test suite
+covering everything built so far — unit tests that call handlers directly, and
+integration tests that launch a real server over stdio and speak MCP to it.
 
 ## Branches
 
@@ -25,11 +24,12 @@ index that points at these.
 | `class_4` | [Class 4 — Implementing Resources](https://themcpguy.com/docs/mcp-java-sdk/implementing-resources) |
 | `class_5` | [Class 5 — Implementing Prompts](https://themcpguy.com/docs/mcp-java-sdk/implementing-prompts)     |
 | `class_6` | [Class 6 — Error Handling](https://themcpguy.com/docs/mcp-java-sdk/error-handling)                 |
+| `class_7` | [Class 7 — Testing MCP Servers](https://themcpguy.com/docs/mcp-java-sdk/testing)                   |
 
 ```bash
 git clone https://github.com/the-mcp-guy/mcp-java-sdk-course.git
 cd mcp-java-sdk-course
-git checkout class_6
+git checkout class_7
 ```
 
 ## Prerequisites
@@ -269,6 +269,47 @@ and the client waits until its own timeout expires. No exception is thrown and
 nothing appears in the logs, which makes it one of the harder MCP bugs to spot:
 an empty result and a hung request look identical from the server's side.
 
+## Running the tests
+
+```bash
+mvn verify          # unit tests, then package, then integration tests
+mvn test            # unit tests only — fast, no JAR needed
+```
+
+`mvn verify` on this branch runs 28 tests: 17 unit and 11 integration.
+
+```
+Tests run: 17, Failures: 0, Errors: 0, Skipped: 0     surefire  (*Test)
+Tests run: 11, Failures: 0, Errors: 0, Skipped: 0     failsafe  (*IT)
+BUILD SUCCESS
+```
+
+One `ERROR` line appears in the output, from `SearchCustomersToolTest`. That is a
+test deliberately driving the failure path, not a broken test.
+
+### Why two kinds of test
+
+The split is not ceremony — the two catch different bugs.
+
+**Unit tests (`*Test`, surefire)** call a handler directly and never start a
+server. `CalculateToolTest` invokes `evaluate(Map.of(...))` and asserts on the
+returned `CallToolResult`. They run in milliseconds and pin down logic: parsing,
+validation, error results.
+
+**Integration tests (`*IT`, failsafe)** launch the packaged JAR as a subprocess
+and talk real JSON-RPC to it over stdio. They are the only thing that catches
+wiring faults — a tool registered under the wrong name, a schema that doesn't
+serialise, a capability never declared. A unit test cannot see any of that,
+because it never crosses the transport.
+
+They run in different Maven phases for a concrete reason: `*IT` classes execute
+in `integration-test`, **after** `package`. The JAR the test launches has to
+exist first, which is why they can't be surefire tests.
+
+`McpTestServer` is the small harness the `*IT` classes share — it starts the
+server, performs the MCP handshake, and exposes request helpers so each test
+reads as a conversation rather than as pipe plumbing.
+
 ## Project layout
 
 ```
@@ -301,6 +342,18 @@ src/main/java/com/themcpguy/
 └── errors/                                Class 6 — the 'acme-errors' server
     ├── ErrorsMcpServer.java               Entry point; takes NONE / SLOW / BROKEN
     └── FindCustomerTool.java              Built twice — one handles empty, one hangs
+
+src/test/java/com/themcpguy/              Class 7 — the test suite
+├── McpTestServer.java                     Harness: launches the JAR, does the handshake
+├── ToolsServerIT.java                     Integration — acme-tools over real stdio
+├── ResourcesServerIT.java                 Integration — acme-resources over real stdio
+├── PromptsServerIT.java                   Integration — acme-prompts over real stdio
+├── tools/
+│   ├── CalculateToolTest.java             Unit — expression parsing and error results
+│   └── SearchCustomersToolTest.java       Unit — StepVerifier over the async handler
+├── resources/CustomerProfileResourceTest.java   Unit — template resolution and payload
+├── prompts/AccountReviewPromptTest.java   Unit — argument handling and message shape
+└── errors/FindCustomerToolTest.java       Unit — the empty-vs-handled contrast
 ```
 
 ## Notes on the code
@@ -325,6 +378,12 @@ fine and only misbehaves at runtime.
 ## Notes on the build
 
 A few choices in `pom.xml` are deliberate and worth understanding:
+
+**Class 7 adds three build entries.** `assertj-core` for `assertThat(...)`,
+`reactor-test` for `StepVerifier` (asserting on a `Mono` without blocking), and
+`maven-failsafe-plugin` bound to `integration-test` and `verify`. Failsafe is
+what makes `*IT` classes run after `package` rather than before — surefire would
+run them too early, when the JAR they launch does not yet exist.
 
 **`mcp-core` + `mcp-json-jackson2`, not the bundled `mcp` artifact.**
 The umbrella `mcp` artifact pulls in `mcp-json-jackson3`, which uses Jackson 3's
