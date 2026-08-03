@@ -1,0 +1,15 @@
+server:
+  port: 8080
+  # Listen on the loopback interface only. Without this the server is reachable from
+  # every machine on the network the moment it starts.
+  address: 127.0.0.1
+
+mcp:
+  endpoint: /mcp
+  # An empty list rejects everything rather than allowing everything.
+  allowed-origins:
+    - http://localhost:8080
+  # These are matched against the Host header exactly, so the port has to be there.
+  allowed-hosts:
+    - localhost:8080
+    - 127.0.0.1:8080
