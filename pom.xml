@@ -15,6 +15,19 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
+    <dependencyManagement>
+        <dependencies>
+            <!-- Class 9. Manages the Spring Boot versions so the starter below needs none. -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>4.1.0</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <!-- MCP Java SDK 2.0.0 is GA (the earlier 1.1.x and 1.0.x lines are still patched).
              The bundled `mcp` artifact pulls in mcp-core plus mcp-json-jackson3, which uses
@@ -29,6 +42,12 @@
             <groupId>io.modelcontextprotocol.sdk</groupId>
             <artifactId>mcp-json-jackson2</artifactId>
             <version>2.0.0</version>
+        </dependency>
+
+        <!-- Class 9. Embedded Tomcat, so the server can answer HTTP instead of stdio. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
         <!-- Logging (SLF4J + Logback) -->
@@ -66,6 +85,17 @@
 
     <build>
         <plugins>
+            <!-- Class 9. Runs the HTTP server with `mvn spring-boot:run`. Spring Boot needs
+                 its own launcher, because the shade plugin overwrites the META-INF files
+                 Spring uses to find its auto-configuration. -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>4.1.0</version>
+                <configuration>
+                    <mainClass>com.themcpguy.http.McpHttpApplication</mainClass>
+                </configuration>
+            </plugin>
             <!-- Class 7. Runs *IT classes in the integration-test phase, after package,
                  so the JAR the test launches actually exists. -->
             <plugin>
