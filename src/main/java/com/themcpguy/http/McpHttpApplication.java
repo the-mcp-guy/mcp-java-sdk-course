@@ -4,7 +4,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * The same customer tools from Class 3, reachable over HTTP instead of stdio.
+ * The tools, resources and prompts from Classes 3 to 5, reachable over HTTP instead of stdio.
  */
 @SpringBootApplication
 public class McpHttpApplication {
